@@ -21,7 +21,6 @@ import studentProfileRoutes from "./routes/studentProfile.js";
 import scheduleRoutes from "./routes/schedule.js";
 
 dotenv.config();
-
 const app = express();
 
 /* ================= Middleware ================= */
