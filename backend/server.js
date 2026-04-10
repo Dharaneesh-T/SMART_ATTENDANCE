@@ -1,8 +1,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+import os from "os";
 
 import connectDB from "./config/db.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /* ===== Routes ===== */
 import studentRoutes from "./routes/studentRoutes.js";
@@ -20,7 +26,12 @@ const app = express();
 
 /* ================= Middleware ================= */
 
-app.use(cors());
+// ✅ FIX: allow frontend URL (IMPORTANT)
+app.use(cors({
+  origin: "*", // change later to your Vercel URL
+  credentials: true
+}));
+
 app.use(express.json());
 
 app.use((req, res, next) => {
@@ -28,11 +39,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/favicon.ico", (req, res) => res.status(204).end());
-
 /* ================= Routes ================= */
-
-console.log("📌 Registering API Routes...");
 
 app.use("/api/students", studentRoutes);
 app.use("/api/attendance", attendanceRoutes);
@@ -43,25 +50,29 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/student-profile", studentProfileRoutes);
 app.use("/api/schedule", scheduleRoutes);
 
+if (process.env.NODE_ENV === "production") {
+  const frontendDist = path.join(__dirname, "../frontend/dist");
+  app.use(express.static(frontendDist));
+
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
+}
+
 /* ================= Health ================= */
 
+// ✅ IMPORTANT for Render
 app.get("/", (req, res) => {
-  res.json({
-    status: "OK",
-    message: "Attendance API Running 🚀"
-  });
+  res.send("Backend is running 🚀");
 });
 
 app.get("/api/test", (req, res) => {
-  res.json({
-    message: "API working correctly"
-  });
+  res.json({ message: "API working correctly" });
 });
 
 /* ================= 404 ================= */
 
 app.use((req, res) => {
-  console.log("❌ 404:", req.originalUrl);
   res.status(404).json({
     success: false,
     message: "Route not found"
@@ -71,10 +82,10 @@ app.use((req, res) => {
 /* ================= ERROR ================= */
 
 app.use((err, req, res, next) => {
-  console.error("🔥 Error:", err.message);
+  console.error("🔥 Error:", err);
   res.status(500).json({
     success: false,
-    message: err.message
+    message: err.message || "Server Error"
   });
 });
 
@@ -82,35 +93,39 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-import os from "os";
-
+// ✅ FIX: safer IP function
 const getLocalIp = () => {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]) {
+        if (iface.family === "IPv4" && !iface.internal) {
+          return iface.address;
+        }
       }
     }
+  } catch (err) {
+    return "localhost";
   }
   return "localhost";
 };
 
 const startServer = async () => {
   try {
-
+    console.log("🔄 Connecting to DB...");
     await connectDB();
+    console.log("✅ DB Connected");
 
-    app.listen(PORT, "0.0.0.0", () => {
+    app.listen(PORT, () => {
       console.log("==================================");
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🌐 http://localhost:${PORT}`);
-      console.log(`🌐 http://${getLocalIp()}:${PORT} (Network)`);
+      console.log(`🌐 http://${getLocalIp()}:${PORT}`);
       console.log("==================================");
     });
 
   } catch (error) {
-    console.error("❌ Failed:", error);
+    console.error("❌ Failed to start server:", error);
     process.exit(1);
   }
 };
